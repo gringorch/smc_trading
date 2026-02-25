@@ -7,7 +7,7 @@ name = "smc-trading"
 version = "0.1.0"
 description = "Historical 1m market data ingestion for forex and crypto"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<4.0"
 dependencies = [
   "sqlalchemy>=2.0.36",
   "alembic>=1.14.1",

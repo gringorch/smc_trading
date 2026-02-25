@@ -6,6 +6,8 @@
 - Added Python code quality hooks (`ruff`, `ruff-format`) to run automatically before commits.
 - Added security hooks: `bandit` (scans `src/`) and `pip-audit` (dependency vulnerability audit).
 - Updated `pyproject.toml` dev dependencies to include `pre-commit`, `ruff`, `bandit`, and `pip-audit`.
+- Restricted project Python support metadata to `>=3.11,<4.0` to make Poetry dependency resolution compatible with `pip-audit` transitive constraints in CI.
+- Updated PR CI workflow to install dependencies with `pip install -e .[dev]` instead of Poetry, aligning CI with setuptools/PEP 621 project metadata.
 - Documented pre-commit install and execution flow in `README.md`.
 
 ## 2026-02-24
