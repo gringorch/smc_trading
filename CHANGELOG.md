@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-02-25
+
+- Added `.pre-commit-config.yaml` with repository hygiene hooks (`trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-merge-conflict`, `detect-private-key`).
+- Added Python code quality hooks (`ruff`, `ruff-format`) to run automatically before commits.
+- Added security hooks: `bandit` (scans `src/`) and `pip-audit` (dependency vulnerability audit).
+- Updated `pyproject.toml` dev dependencies to include `pre-commit`, `ruff`, `bandit`, and `pip-audit`.
+- Documented pre-commit install and execution flow in `README.md`.
+
 ## 2026-02-24
 
 - Fixed Alembic/MySQL migration import namespace mismatch in `alembic/env.py` to prevent duplicate SQLAlchemy table registration.

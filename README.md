@@ -16,6 +16,27 @@ pip install -e .[dev]
 cp .env.example .env
 ```
 
+## Pre-commit (calidad y seguridad)
+
+Instalar hooks en el repositorio:
+
+```bash
+pre-commit install
+```
+
+Ejecutar validacion completa manual:
+
+```bash
+pre-commit run --all-files
+```
+
+Hooks incluidos:
+
+- Higiene de repositorio (`trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-merge-conflict`, `detect-private-key`).
+- Calidad Python (`ruff`, `ruff-format`).
+- Seguridad de codigo (`bandit` sobre `src/`).
+- Seguridad de dependencias (`pip-audit`).
+
 ## Migraciones
 
 ```bash
