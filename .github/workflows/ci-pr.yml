@@ -1,0 +1,194 @@
+name: CI PR
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+
+      - name: Run pytest
+        run: pytest
+
+  coverage:
+    name: coverage-total (py3.12)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+
+      - name: Run coverage (min 90%)
+        run: pytest --cov=. --cov-report=xml --cov-report=term --cov-fail-under=90
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+
+  diff-coverage:
+    name: coverage-diff (py3.12)
+    runs-on: ubuntu-latest
+    needs: coverage
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+
+      - name: Install diff-cover
+        run: python -m pip install diff-cover
+
+      - name: Generate coverage xml
+        run: pytest --cov=. --cov-report=xml
+
+      - name: Check diff coverage (min 80%)
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          diff-cover coverage.xml --compare-branch "origin/${{ github.base_ref }}" --fail-under=80
+
+  security:
+    name: security-deps (py3.12)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+
+      - name: Run pip-audit (json)
+        run: pip-audit --format=json --output pip-audit.json
+
+      - name: Fail on HIGH/CRITICAL vulnerabilities only
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          import urllib.request
+
+          def classify(score: float) -> str:
+              if score >= 9.0:
+                  return 'CRITICAL'
+              if score >= 7.0:
+                  return 'HIGH'
+              if score >= 4.0:
+                  return 'MEDIUM'
+              if score > 0.0:
+                  return 'LOW'
+              return 'UNKNOWN'
+
+          def extract_cvss_score(osv_payload: dict):
+              severities = osv_payload.get('severity', [])
+              for sev in severities:
+                  score = sev.get('score', '')
+                  if isinstance(score, str) and score.startswith('CVSS:'):
+                      parts = score.split('/')
+                      for part in parts:
+                          if part.startswith('SCORE:'):
+                              try:
+                                  return float(part.split(':', 1)[1])
+                              except ValueError:
+                                  pass
+                  try:
+                      return float(score)
+                  except (TypeError, ValueError):
+                      continue
+              db_sev = osv_payload.get('database_specific', {}).get('severity')
+              if isinstance(db_sev, str):
+                  return db_sev.upper()
+              return None
+
+          with open('pip-audit.json', 'r', encoding='utf-8') as f:
+              data = json.load(f)
+
+          findings = []
+          for dep in data.get('dependencies', []):
+              for vuln in dep.get('vulns', []):
+                  vuln_id = vuln.get('id')
+                  severity = 'UNKNOWN'
+
+                  if vuln_id:
+                      try:
+                          with urllib.request.urlopen(
+                              f'https://api.osv.dev/v1/vulns/{vuln_id}', timeout=15
+                          ) as response:
+                              osv_payload = json.loads(response.read().decode('utf-8'))
+                          extracted = extract_cvss_score(osv_payload)
+                          if isinstance(extracted, (float, int)):
+                              severity = classify(float(extracted))
+                          elif isinstance(extracted, str):
+                              severity = extracted
+                      except Exception:
+                          severity = 'UNKNOWN'
+
+                  if severity in {'HIGH', 'CRITICAL'}:
+                      findings.append((dep.get('name'), vuln_id, severity))
+
+          if findings:
+              print('Found HIGH/CRITICAL vulnerabilities:')
+              for package, vuln_id, severity in findings:
+                  print(f'- package={package} id={vuln_id} severity={severity}')
+              sys.exit(1)
+
+          print('No HIGH/CRITICAL vulnerabilities found by configured filter.')
+          PY
