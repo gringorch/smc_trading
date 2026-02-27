@@ -6,6 +6,9 @@ from datetime import UTC, datetime, timedelta
 
 _SUPPORTED_TIMEFRAMES: dict[str, timedelta] = {
     "1m": timedelta(minutes=1),
+    "2m": timedelta(minutes=2),
+    "3m": timedelta(minutes=3),
+    "4m": timedelta(minutes=4),
     "5m": timedelta(minutes=5),
     "15m": timedelta(minutes=15),
     "1h": timedelta(hours=1),

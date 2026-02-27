@@ -7,6 +7,9 @@
 - Added chart timezone runtime setting (`CHART_TIMEZONE`, default `UTC`) and strict UTC validation for chart bucketing.
 - Added unit tests for resampling correctness (`1m -> 5m/15m/1h/1d`), partial last candle inclusion, chart service behavior, and CLI chart command wiring.
 - Added plotting dependencies (`pandas`, `matplotlib`, `mplfinance`).
+- Fixed chart default range behavior: when `--end` is omitted, charting now anchors to the latest persisted 1m candle for the symbol, avoiding empty plots on stale datasets.
+- Added clearer domain errors when no persisted candles exist for a symbol/range.
+- Added additional minute timeframes for charting: `2m`, `3m`, and `4m`.
 
 ## 2026-02-25
 

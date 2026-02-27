@@ -41,16 +41,29 @@ class PriceChartService:
             raise ValueError("candles must be greater than 0")
 
         duration = parse_timeframe(timeframe)
-        end_utc = normalize_utc(end or datetime.now(UTC))
-        # Load a wider window to tolerate missing minutes while preserving final candles count.
-        start_utc = end_utc - (duration * candles * 2)
 
         asset_id = self._repository.get_asset_id_by_symbol(symbol)
         if asset_id is None:
             raise ValueError(f"symbol '{symbol}' not found or inactive")
 
+        if end is None:
+            latest = self._repository.get_latest_1m_timestamp(asset_id)
+            if latest is None:
+                raise ValueError(f"no persisted 1m candles for symbol '{symbol}'")
+            end_utc = normalize_utc(latest)
+        else:
+            end_utc = normalize_utc(end)
+
+        # Load a wider window to tolerate missing minutes while preserving final candles count.
+        start_utc = end_utc - (duration * candles * 2)
+
         source_rows = self._repository.load_1m_rows(asset_id=asset_id, start_utc=start_utc, end_utc=end_utc)
         logger.debug("price_chart source_rows=%s symbol=%s timeframe=%s", len(source_rows), symbol, timeframe)
+
+        if not source_rows:
+            raise ValueError(
+                f"no candles in requested range for symbol='{symbol}' timeframe='{timeframe}' end='{end_utc.isoformat()}'"
+            )
 
         resampled = resample_ohlcv(source_rows, timeframe)
         trimmed = resampled[-candles:]
@@ -62,6 +75,11 @@ class PriceChartService:
             symbol,
             timeframe,
         )
+
+        if not trimmed:
+            raise ValueError(
+                f"no chart bars produced for symbol='{symbol}' timeframe='{timeframe}' end='{end_utc.isoformat()}'"
+            )
 
         render_price_chart(
             symbol=symbol,

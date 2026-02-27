@@ -152,7 +152,7 @@ def test_cli_plot_price_calls_chart_service(monkeypatch) -> None:
             "--symbol",
             "EURUSD",
             "--timeframe",
-            "15m",
+            "3m",
             "--candles",
             "200",
             "--show",
@@ -162,7 +162,7 @@ def test_cli_plot_price_calls_chart_service(monkeypatch) -> None:
 
     assert result.exit_code == 0
     assert calls["symbol"] == "EURUSD"
-    assert calls["timeframe"] == "15m"
+    assert calls["timeframe"] == "3m"
     assert calls["candles"] == 200
     assert calls["show"] is False
-    assert "plot-price: symbol=EURUSD timeframe=15m requested=200 returned=2" in result.stdout
+    assert "plot-price: symbol=EURUSD timeframe=3m requested=200 returned=2" in result.stdout

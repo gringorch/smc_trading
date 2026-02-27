@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+import pytest
+
 from charting.resampler import OhlcvBar, resample_ohlcv
 
 
@@ -67,3 +69,12 @@ def test_resample_1m_to_1d() -> None:
     assert len(bars) == 2
     assert bars[0].timestamp_utc == datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
     assert bars[1].timestamp_utc == datetime(2026, 1, 2, 0, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("timeframe,expected_bars", [("2m", 3), ("3m", 2), ("4m", 2)])
+def test_resample_supports_new_minute_timeframes(timeframe: str, expected_bars: int) -> None:
+    rows = _make_1m_rows(datetime(2026, 1, 1, 10, 0, tzinfo=UTC), 6)
+
+    bars = resample_ohlcv(rows, timeframe)
+
+    assert len(bars) == expected_bars

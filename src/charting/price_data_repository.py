@@ -29,6 +29,15 @@ class PriceDataRepository:
         stmt = select(Asset.id).where(Asset.symbol == symbol, Asset.is_active.is_(True))
         return self._session.scalar(stmt)
 
+
+    def get_latest_1m_timestamp(self, asset_id: int) -> datetime | None:
+        """Return latest persisted 1m timestamp for the asset."""
+        stmt = select(MarketCandle.timestamp_utc).where(
+            MarketCandle.asset_id == asset_id,
+            MarketCandle.timeframe == "1m",
+        ).order_by(MarketCandle.timestamp_utc.desc()).limit(1)
+        return self._session.scalar(stmt)
+
     def load_1m_rows(
         self,
         *,

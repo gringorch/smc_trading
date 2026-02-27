@@ -3,10 +3,12 @@ Necesitamos visualizar series OHLCV persistidas para inspección visual en forma
 
 ## Requirements
 - Exponer función de aplicación `plot_price(symbol, timeframe, candles, end=None, show=True, save_path=None, include_volume=False)`.
-- Timeframes soportados: `1m`, `5m`, `15m`, `1h`, `4h`, `1d`.
+- Timeframes soportados: `1m`, `2m`, `3m`, `4m`, `5m`, `15m`, `1h`, `4h`, `1d`.
 - El origen de datos debe ser exclusivamente candles persistidas en `timeframe=1m`.
 - Bucketing UTC consistente por inicio de vela (`floor` al timeframe en UTC).
 - Incluir vela parcial final cuando el bucket actual no está cerrado.
+- Si `end` no se provee, usar el último timestamp 1m persistido del símbolo como referencia por defecto.
+- Si no hay datos persistidos para el símbolo/rango, devolver error funcional claro.
 - Logging debug con cantidad de filas crudas leídas y velas resultantes.
 - CLI:
   - comando `symbols` para listar símbolos disponibles
