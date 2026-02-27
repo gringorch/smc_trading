@@ -2,6 +2,13 @@
 
 ## 2026-02-27
 
+- Added SMC strategy events layer scaffolding under `src/strategy` with typed event contract (`Event`, enums, market state, strategy config defaults).
+- Added structure detectors for confirmed pivots (non-repaint), close-based BOS/CHOCH, and HTF sweep detection with reclaim logic.
+- Added imbalance detectors for 3-candle FVG and IFVG close-based invalidation.
+- Added context utilities for Fibonacci premium/discount zones and deterministic 1H market state transitions.
+- Added strategy service entrypoints: `analyze`, `analyze_multi_tf`, and `analyze_adaptive` plus chart overlay renderer (`src/charting/plot_overlays.py`).
+- Added unit-test modules for structure, imbalance, context, and service contracts (`tests/unit/test_strategy_*.py`).
+
 - Added price chart feature modules (`charting`) with layered data access, UTC timeframe resampling, and candlestick rendering via `mplfinance`.
 - Added CLI commands `symbols` (list active symbols) and `plot-price` (render/save candlestick chart from persisted 1m candles).
 - Added chart timezone runtime setting (`CHART_TIMEZONE`, default `UTC`) and strict UTC validation for chart bucketing.
