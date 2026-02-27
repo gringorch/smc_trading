@@ -115,3 +115,41 @@ def test_plot_price_raises_when_symbol_has_no_persisted_candles(monkeypatch) -> 
 
     with pytest.raises(ValueError, match="no persisted 1m candles"):
         service.plot_price(symbol="EURUSD", timeframe="1h", candles=2, show=False)
+
+
+def test_constructor_rejects_non_utc_timezone() -> None:
+    with pytest.raises(ValueError, match="only UTC timezone"):
+        PriceChartService(FakeRepo([]), chart_timezone="America/New_York")
+
+
+def test_plot_price_rejects_non_positive_candles(monkeypatch) -> None:
+    monkeypatch.setattr("charting.service.render_price_chart", lambda **_: None)
+    service = PriceChartService(FakeRepo(_rows(datetime(2026, 1, 1, 10, 0, tzinfo=UTC), 2)))
+
+    with pytest.raises(ValueError, match="candles must be greater than 0"):
+        service.plot_price(symbol="EURUSD", timeframe="1m", candles=0, show=False)
+
+
+def test_plot_price_raises_when_no_rows_in_requested_range(monkeypatch) -> None:
+    monkeypatch.setattr("charting.service.render_price_chart", lambda **_: None)
+    rows = _rows(datetime(2026, 1, 1, 10, 0, tzinfo=UTC), 5)
+    service = PriceChartService(FakeRepo(rows))
+
+    with pytest.raises(ValueError, match="no candles in requested range"):
+        service.plot_price(
+            symbol="EURUSD",
+            timeframe="1m",
+            candles=2,
+            end=datetime(2025, 12, 31, 0, 0, tzinfo=UTC),
+            show=False,
+        )
+
+
+def test_plot_price_raises_when_resample_produces_no_bars(monkeypatch) -> None:
+    monkeypatch.setattr("charting.service.render_price_chart", lambda **_: None)
+    monkeypatch.setattr("charting.service.resample_ohlcv", lambda *_args, **_kwargs: [])
+    rows = _rows(datetime(2026, 1, 1, 10, 0, tzinfo=UTC), 5)
+    service = PriceChartService(FakeRepo(rows))
+
+    with pytest.raises(ValueError, match="no chart bars produced"):
+        service.plot_price(symbol="EURUSD", timeframe="1m", candles=2, show=False)
