@@ -99,3 +99,70 @@ def test_cli_reprocess_runs_service(monkeypatch) -> None:
     assert calls["asset_id"] == 9
     assert "reprocess: attempted=1 succeeded=1 failed=0 upserted=10 deleted=2" in result.stdout
 
+
+def test_cli_symbols_prints_available_symbols(monkeypatch) -> None:
+    runner = CliRunner()
+
+    @contextmanager
+    def fake_scope():
+        yield object()
+
+    class FakePriceService:
+        def __init__(self, _repo, chart_timezone: str) -> None:
+            assert chart_timezone == "UTC"
+
+        def list_symbols(self) -> list[str]:
+            return ["BTCUSDT", "EURUSD"]
+
+    monkeypatch.setattr(cli, "session_scope", fake_scope)
+    monkeypatch.setattr(cli, "PriceChartService", FakePriceService)
+    monkeypatch.setattr(cli, "get_settings", lambda: Settings(DB_PASSWORD="x", CHART_TIMEZONE="UTC"))
+
+    result = runner.invoke(cli.app, ["symbols"])
+
+    assert result.exit_code == 0
+    assert "BTCUSDT" in result.stdout
+    assert "EURUSD" in result.stdout
+
+
+def test_cli_plot_price_calls_chart_service(monkeypatch) -> None:
+    runner = CliRunner()
+    calls: dict[str, object] = {}
+
+    @contextmanager
+    def fake_scope():
+        yield object()
+
+    class FakePriceService:
+        def __init__(self, _repo, chart_timezone: str) -> None:
+            assert chart_timezone == "UTC"
+
+        def plot_price(self, **kwargs):
+            calls.update(kwargs)
+            return [object(), object()]
+
+    monkeypatch.setattr(cli, "session_scope", fake_scope)
+    monkeypatch.setattr(cli, "PriceChartService", FakePriceService)
+    monkeypatch.setattr(cli, "get_settings", lambda: Settings(DB_PASSWORD="x", CHART_TIMEZONE="UTC"))
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "plot-price",
+            "--symbol",
+            "EURUSD",
+            "--timeframe",
+            "15m",
+            "--candles",
+            "200",
+            "--show",
+            "False",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert calls["symbol"] == "EURUSD"
+    assert calls["timeframe"] == "15m"
+    assert calls["candles"] == 200
+    assert calls["show"] is False
+    assert "plot-price: symbol=EURUSD timeframe=15m requested=200 returned=2" in result.stdout

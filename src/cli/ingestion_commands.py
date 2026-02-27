@@ -1,9 +1,13 @@
 """Typer commands for ingestion jobs."""
 
 import logging
+from datetime import datetime
 
 import typer
 
+from charting.price_data_repository import PriceDataRepository
+from charting.service import PriceChartService
+from charting.timeframes import supported_timeframes
 from config.settings import get_settings
 from db.engine import session_scope
 from ingestion.services.ingestion_service import IngestionService
@@ -55,3 +59,48 @@ def reprocess(asset_id: int = typer.Option(..., help="Asset id")) -> None:
     with session_scope() as session:
         summary = IngestionService(session, settings).run_reprocess(asset_id)
     _print_summary("reprocess", summary)
+
+
+@app.command("symbols")
+def symbols() -> None:
+    """List active symbols available for charting."""
+    _configure_logging()
+    settings = get_settings()
+    with session_scope() as session:
+        service = PriceChartService(PriceDataRepository(session), chart_timezone=settings.chart_timezone)
+        for symbol in service.list_symbols():
+            typer.echo(symbol)
+
+
+@app.command("plot-price")
+def plot_price(
+    symbol: str = typer.Option(..., help="Asset symbol. Use `symbols` command to list values."),
+    timeframe: str = typer.Option(
+        "1h", help=f"Target timeframe. Supported: {', '.join(supported_timeframes())}"
+    ),
+    candles: int = typer.Option(200, help="Number of candles to display (limit)."),
+    end: datetime | None = typer.Option(
+        default=None, help="Optional end timestamp (ISO8601). Defaults to now UTC."
+    ),
+    show: bool = typer.Option(True, help="Display chart window."),
+    save_path: str | None = typer.Option(None, help="Optional output image file path."),
+    include_volume: bool = typer.Option(False, help="Include volume subplot."),
+) -> None:
+    """Render a candlestick chart from persisted 1m candles."""
+    _configure_logging()
+    settings = get_settings()
+    with session_scope() as session:
+        service = PriceChartService(PriceDataRepository(session), chart_timezone=settings.chart_timezone)
+        bars = service.plot_price(
+            symbol=symbol,
+            timeframe=timeframe,
+            candles=candles,
+            end=end,
+            show=show,
+            save_path=save_path,
+            include_volume=include_volume,
+        )
+
+    typer.echo(
+        f"plot-price: symbol={symbol} timeframe={timeframe} requested={candles} returned={len(bars)}"
+    )
