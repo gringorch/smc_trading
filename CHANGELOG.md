@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-02-27
+
+- Added price chart feature modules (`charting`) with layered data access, UTC timeframe resampling, and candlestick rendering via `mplfinance`.
+- Added CLI commands `symbols` (list active symbols) and `plot-price` (render/save candlestick chart from persisted 1m candles).
+- Added chart timezone runtime setting (`CHART_TIMEZONE`, default `UTC`) and strict UTC validation for chart bucketing.
+- Added unit tests for resampling correctness (`1m -> 5m/15m/1h/1d`), partial last candle inclusion, chart service behavior, and CLI chart command wiring.
+- Added plotting dependencies (`pandas`, `matplotlib`, `mplfinance`).
+- Fixed chart default range behavior: when `--end` is omitted, charting now anchors to the latest persisted 1m candle for the symbol, avoiding empty plots on stale datasets.
+- Added clearer domain errors when no persisted candles exist for a symbol/range.
+- Added additional minute timeframes for charting: `2m`, `3m`, and `4m`.
+
 ## 2026-02-25
 
 - Added `.pre-commit-config.yaml` with repository hygiene hooks (`trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-merge-conflict`, `detect-private-key`).

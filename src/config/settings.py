@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     dukascopy_rate_limit_ms: int = Field(default=250, alias="DUKASCOPY_RATE_LIMIT_MS")
     binance_rate_limit_ms: int = Field(default=250, alias="BINANCE_RATE_LIMIT_MS")
+    chart_timezone: str = Field(default="UTC", alias="CHART_TIMEZONE")
 
     @property
     def mysql_dsn(self) -> str:
