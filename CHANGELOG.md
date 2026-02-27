@@ -8,6 +8,9 @@
 - Added context utilities for Fibonacci premium/discount zones and deterministic 1H market state transitions.
 - Added strategy service entrypoints: `analyze`, `analyze_multi_tf`, and `analyze_adaptive` plus chart overlay renderer (`src/charting/plot_overlays.py`).
 - Added unit-test modules for structure, imbalance, context, and service contracts (`tests/unit/test_strategy_*.py`).
+- Added strategy definition/backtesting foundations: declarative strategy loader (`src/strategy/definitions.py`), strategy evaluator (`src/strategy/engine.py`), simulator + metrics (`src/backtesting/`).
+- Added quickstart and example strategy (`docs/strategy_quickstart.md`, `strategies/examples/htf_ltf_ifvg.yaml`).
+- Added unit tests for strategy definitions, strategy engine, backtesting simulator, and metrics.
 
 - Added price chart feature modules (`charting`) with layered data access, UTC timeframe resampling, and candlestick rendering via `mplfinance`.
 - Added CLI commands `symbols` (list active symbols) and `plot-price` (render/save candlestick chart from persisted 1m candles).

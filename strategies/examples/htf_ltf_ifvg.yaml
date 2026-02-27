@@ -1,0 +1,23 @@
+name: htf_ltf_ifvg
+version: 1.0.0
+description: Trigger IFVG en LTF dentro de POI HTF
+timeframes:
+  htf: 1h
+  ltf_default: 3m
+  ltf_trend: 1m
+context_filters:
+  allowed_market_states: [TREND_BULL, TREND_BEAR]
+  required_poi_kinds: [FVG, SWEEP_LOW, SWEEP_HIGH, FIB_DISCOUNT]
+  max_distance_to_poi: 0.0008
+trigger_rules:
+  - event_kind: IFVG
+    direction: bull
+  - event_kind: IFVG
+    direction: bear
+risk_rules:
+  stop_loss_pct: 0.003
+  take_profit_pct: 0.006
+execution_rules:
+  entry_mode: next_open
+  fee_bps: 1.0
+  slippage_bps: 0.5
