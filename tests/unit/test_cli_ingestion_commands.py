@@ -155,8 +155,7 @@ def test_cli_plot_price_calls_chart_service(monkeypatch) -> None:
             "3m",
             "--candles",
             "200",
-            "--show",
-            "False",
+            "--no-show",
         ],
     )
 
