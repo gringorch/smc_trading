@@ -9,7 +9,7 @@ Sin estas dos capacidades, la evaluación puede generar señales fuera de horari
 ## Requirements
 1. Permitir definir múltiples bandas horarias por estrategia (por ejemplo: London open, NY open, overlap).
 2. Cada banda horaria debe incluir:
-   - timezone,
+   - timezone (fijado en `UTC` para esta fase),
    - hora inicio/fin,
    - días habilitados,
    - comportamiento para ventanas que cruzan medianoche.
@@ -29,14 +29,16 @@ Sin estas dos capacidades, la evaluación puede generar señales fuera de horari
    - `max_qty`.
 7. Incluir validaciones de seguridad:
    - si `price_risk == 0`, no emitir trade,
-   - si `qty_raw < min_qty`, política configurable (`skip` o `clamp_min`),
+   - si `qty_raw < min_qty`, aplicar política default `skip`,
    - si `qty_raw > max_qty`, clamping a `max_qty`.
 8. Persistir trazabilidad en `TradeIntent.meta` y `TradeResult.meta`:
    - ventana horaria aplicada,
    - riesgo monetario objetivo,
    - cantidad calculada antes/después de redondeo.
 9. El simulador debe usar `qty` calculada por riesgo (no hardcoded global fijo) para PnL.
-10. La documentación de uso debe mostrar ejemplo completo:
+10. En backtesting, el equity para sizing debe actualizarse trade a trade (equity dinámica).
+11. El valor monetario por punto/lote debe obtenerse por lookup de activo (no valor fijo embebido en estrategia).
+12. La documentación de uso debe mostrar ejemplo completo:
    - estrategia con sesiones,
    - parámetros de cuenta/riesgo,
    - salida esperada de qty por trade.
@@ -56,25 +58,30 @@ Sin estas dos capacidades, la evaluación puede generar señales fuera de horari
   - `name`, `timezone`, `start_time`, `end_time`, `weekdays`
   - `cross_midnight_mode` (implícito por start/end o explícito)
 - `RiskSizingConfig`
-  - `account_equity`
+  - `account_equity_initial`
   - `risk_percent`
-  - `contract_point_value`
   - `qty_step`
   - `min_qty`
   - `max_qty`
-  - `min_qty_policy` (`skip` | `clamp_min`)
+  - `min_qty_policy` (`skip` default)
+  - `equity_mode` (`dynamic` default, actualiza trade a trade)
+- `AssetContractSpec` (lookup por activo)
+  - `asset_id` / `symbol`
+  - `contract_point_value`
+  - `lot_size_reference` (opcional, informativo)
 
 ### 2) Evaluación (strategy engine)
 1. Antes de aplicar trigger, validar si `trigger.ts` cae en alguna sesión activa.
 2. Si no cae:
    - omitir señal (default).
-3. Si cae, calcular `qty` por riesgo usando `entry_ref` y `sl`.
+3. Si cae, calcular `qty` por riesgo usando `entry_ref` y `sl`, consultando `contract_point_value` por lookup del activo.
 4. Adjuntar resultado de sizing en metadata del intent.
 
 ### 3) Simulación (backtester)
 1. Consumir `intent.qty` (calculada por estrategia) en lugar de `quantity` fija.
-2. Mantener `SimulationConfig.quantity` solo como fallback opcional para intents sin qty.
-3. Reportar impacto de sizing en PnL agregado y por trade.
+2. Actualizar equity post-trade y usar ese equity actualizado para el siguiente sizing (`equity_mode=dynamic`).
+3. Mantener `SimulationConfig.quantity` solo como fallback opcional para intents sin qty.
+4. Reportar impacto de sizing en PnL agregado y por trade.
 
 ### 4) Configuración ejemplo
 Agregar ejemplo en `strategies/examples/` con:
@@ -83,18 +90,19 @@ Agregar ejemplo en `strategies/examples/` con:
 - límites de qty realistas.
 
 ## Data Impact
-1. Sin cambios de schema obligatorios.
+1. Se requiere una fuente de lookup de contratos por activo (`contract_point_value`), preferentemente en tabla dedicada.
 2. Se agregan campos en contratos in-memory (`StrategyDefinition`, `TradeIntent.meta`).
-3. Reportes pueden incluir nuevos campos de sizing/sesión en export JSON/CSV.
+3. Reportes pueden incluir nuevos campos de sizing/sesión/equity en export JSON/CSV.
 
 ## Edge Cases
 1. Sesión inválida (formato hora o timezone): error de validación.
 2. Sesión cruzando medianoche: evaluar correctamente pertenencia temporal.
 3. Días no habilitados: no emitir intents.
 4. Stop igual a entry: descartar señal por riesgo cero.
-5. `contract_point_value <= 0`: invalidar configuración.
-6. `risk_percent <= 0` o `> 1`: invalidar configuración.
-7. Rounding de qty a 0 por `qty_step`: aplicar `min_qty_policy`.
+5. Lookup de activo inexistente o sin `contract_point_value`: no emitir trade y registrar error funcional.
+6. `contract_point_value <= 0`: invalidar configuración/registro de contrato.
+7. `risk_percent <= 0` o `> 1`: invalidar configuración.
+8. Rounding de qty a 0 por `qty_step`: aplicar `min_qty_policy` (`skip`).
 
 ## Acceptance Criteria
 1. Estrategia puede definir una o varias ventanas horarias y el engine respeta esas ventanas.
@@ -108,8 +116,8 @@ Agregar ejemplo en `strategies/examples/` con:
    - redondeo y límites de qty,
    - integración intent->simulator con qty variable.
 
-## Open Questions (requieren confirmación)
-1. Timezone base preferida para sesiones: ¿UTC fijo o timezone por sesión (IANA)?
-2. Instrumentos: ¿valor por punto fijo por símbolo en config, o lookup por metadata del activo?
-3. Política cuando `qty_raw < min_qty`: ¿preferís `skip` o `clamp_min` por defecto?
-4. ¿El riesgo % se calcula sobre equity fija (input) o equity dinámica tras cada trade?
+## Decisions Confirmed
+1. Timezone de sesiones: `UTC`.
+2. `contract_point_value` se obtiene por lookup de activo (tabla dedicada).
+3. Política cuando `qty_raw < min_qty`: `skip`.
+4. El sizing usa equity dinámica actualizada trade a trade en backtesting.
