@@ -37,6 +37,26 @@ class PriceChartService:
         include_volume: bool = False,
     ) -> list[OhlcvBar]:
         """Build and render chart bars; return bars for observability/tests."""
+        trimmed = self.get_price_bars(symbol=symbol, timeframe=timeframe, candles=candles, end=end)
+        render_price_chart(
+            symbol=symbol,
+            timeframe=timeframe,
+            bars=trimmed,
+            include_volume=include_volume,
+            show=show,
+            save_path=save_path,
+        )
+        return trimmed
+
+    def get_price_bars(
+        self,
+        *,
+        symbol: str,
+        timeframe: str,
+        candles: int,
+        end: datetime | None = None,
+    ) -> list[OhlcvBar]:
+        """Return resampled OHLCV bars without rendering (for reports/overlays)."""
         if candles <= 0:
             raise ValueError("candles must be greater than 0")
 
@@ -81,12 +101,4 @@ class PriceChartService:
                 f"no chart bars produced for symbol='{symbol}' timeframe='{timeframe}' end='{end_utc.isoformat()}'"
             )
 
-        render_price_chart(
-            symbol=symbol,
-            timeframe=timeframe,
-            bars=trimmed,
-            include_volume=include_volume,
-            show=show,
-            save_path=save_path,
-        )
         return trimmed

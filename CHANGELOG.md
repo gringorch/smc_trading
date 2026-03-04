@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-03-03
+
+- Added FVG (Fair Value Gap) detector with optional mitigation (`wick` / `close`) as a reusable pure-logic module (`src/indicators/fvg.py`).
+- Added `fvg-report` CLI command to generate a lightweight HTML report with Plotly candlestick chart, FVG zone overlays, and a signals table.
+- Added `plotly` dependency for interactive HTML charting and unit tests for FVG detection/mitigation plus CLI wiring.
+
 ## 2026-02-27
 
 - Added price chart feature modules (`charting`) with layered data access, UTC timeframe resampling, and candlestick rendering via `mplfinance`.
