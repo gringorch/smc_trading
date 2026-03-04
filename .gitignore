@@ -107,6 +107,7 @@ pytest_cache/
 .env.*.local
 *.local.json
 .env.example
+reports/
 
 # Secrets - NEVER commit these
 credentials.json
