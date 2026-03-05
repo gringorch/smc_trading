@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-03-04
+
+- Added IFVG detector module (`src/indicators/ifvg.py`) with inversion-by-close logic (`inversion_fill_pct`), displacement filters (`body_pct_range` / `body_atr`), optional sweep/bias/POI gating, and configurable order levels (`entry/stop/tp`).
+- Added IFVG HTML report builder (`src/reporting/ifvg_report.py`) and `ifvg-report` CLI command to generate chart + signals table output (`reports/ifvg_report.html` by default).
+- Exposed IFVG trigger controls in CLI/config: `min_gap_size` (default `0.00005`), `max_bars_from_fvg_formation_to_inversion`, and `body_pct_range` (default `0.7`).
+- Added unit tests for IFVG detection behavior (`tests/unit/test_ifvg_detector.py`), IFVG report rendering (`tests/unit/test_ifvg_report.py`), and CLI wiring/output (`tests/unit/test_cli_ifvg_report.py`).
+
 ## 2026-03-03
 
 - Added FVG (Fair Value Gap) detector with optional mitigation (`wick` / `close`) as a reusable pure-logic module (`src/indicators/fvg.py`).
