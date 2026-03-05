@@ -15,8 +15,10 @@ from db.engine import session_scope
 from ingestion.services.ingestion_service import IngestionService
 from indicators.fvg import FvgConfig, detect_fvgs
 from indicators.ifvg import IfvgConfig, detect_ifvgs
+from indicators.structure import StructureConfig, analyze_structure
 from reporting.fvg_report import build_fvg_report_html
 from reporting.ifvg_report import build_ifvg_report_html
+from reporting.structure_report import build_structure_report_html
 
 app = typer.Typer(help="Historical market ingestion CLI")
 _LTF_TIMEFRAMES = {"1m", "2m", "3m", "4m", "5m"}
@@ -278,4 +280,63 @@ def ifvg_report(
     typer.echo(
         f"ifvg-report: output={output_path} symbol={symbol} "
         f"timeframe={ltf_timeframe} signals={len(signals)}"
+    )
+
+
+@app.command("structure-report")
+def structure_report(
+    symbol: str = typer.Option(..., help="Asset symbol. Use `symbols` command to list values."),
+    timeframe: str = typer.Option(
+        "1h", help=f"Target timeframe. Supported: {', '.join(supported_timeframes())}"
+    ),
+    candles: int = typer.Option(300, help="Number of candles to analyze/display (limit)."),
+    end: datetime | None = typer.Option(
+        default=None, help="Optional end timestamp (ISO8601). Defaults to latest persisted 1m candle."
+    ),
+    swing_left: int = typer.Option(2, help="Bars to the left for swing (pivot) confirmation."),
+    swing_right: int = typer.Option(2, help="Bars to the right for swing (pivot) confirmation."),
+    allow_unconfirmed_last_swing: bool = typer.Option(
+        True, help="Allow latest tentative swing when right-side bars are missing."
+    ),
+    bos_buffer: float = typer.Option(
+        0.0, help="Price buffer for BOS confirmation: close > swing_high+buffer or close < swing_low-buffer."
+    ),
+    output: str = typer.Option("reports/structure_report.html", help="Output HTML file path."),
+) -> None:
+    """Generate market structure HTML report (swings + BOS + bias + dealing range)."""
+    _configure_logging()
+    settings = get_settings()
+
+    config = StructureConfig(
+        swing_left=swing_left,
+        swing_right=swing_right,
+        allow_unconfirmed_last_swing=allow_unconfirmed_last_swing,
+        bos_buffer=Decimal(str(bos_buffer)),
+    )
+
+    with session_scope() as session:
+        service = PriceChartService(PriceDataRepository(session), chart_timezone=settings.chart_timezone)
+        bars = service.get_price_bars(symbol=symbol, timeframe=timeframe, candles=candles, end=end)
+
+    result = analyze_structure(bars=bars, config=config)
+    end_display = end or bars[-1].timestamp_utc
+    html = build_structure_report_html(
+        symbol=symbol,
+        timeframe=timeframe,
+        candles=candles,
+        end_utc=end_display,
+        config=config,
+        bars=bars,
+        swings=result.swings,
+        bos_events=result.bos_events,
+        state=result.state,
+    )
+
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(html, encoding="utf-8")
+
+    typer.echo(
+        f"structure-report: output={output_path} symbol={symbol} timeframe={timeframe} "
+        f"swings={len(result.swings)} bos={len(result.bos_events)} bias={result.state.current_bias}"
     )

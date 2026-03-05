@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-03-05
+
+- Added market structure detector (`src/indicators/structure.py`) with configurable swing pivots (`swing_left/swing_right`), optional tentative last swing, BOS-by-close detection with `bos_buffer`, and derived state (`current_bias`, `current_bias_since`, dealing range with premium/discount zones).
+- Added market structure HTML report builder (`src/reporting/structure_report.py`) with Plotly candlestick chart, swing markers, BOS markers, dealing range overlays, and explicit source labels for dealing-range extremes.
+- Added `structure-report` CLI command (`src/cli/ingestion_commands.py`) to generate `reports/structure_report.html` (default) from persisted candles.
+- Added unit tests for structure detector logic, report rendering, and CLI wiring (`tests/unit/test_structure_detector.py`, `tests/unit/test_structure_report.py`, `tests/unit/test_cli_structure_report.py`).
+- Updated dealing range derivation to use the latest confirmed swing low/high as active premium/discount bounds, improving correction-zone alignment in live charts.
+
 ## 2026-03-04
 
 - Added IFVG detector module (`src/indicators/ifvg.py`) with inversion-by-close logic (`inversion_fill_pct`), displacement filters (`body_pct_range` / `body_atr`), optional sweep/bias/POI gating, and configurable order levels (`entry/stop/tp`).
