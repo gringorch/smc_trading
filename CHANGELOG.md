@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-03-06
+
+- Added HTF POI detector (`src/indicators/htf_poi.py`) that combines market structure bias + dealing range with FVG zones, including POI lifecycle states (`pending/active/invalidated`), configurable activation rules, and configurable expiration rules.
+- Added HTF POI HTML report builder (`src/reporting/htf_poi_report.py`) with Plotly candlestick chart, premium/discount overlays, POI zone overlays, side/status/expiration labels, and reasons table.
+- Added `htf-poi-report` CLI command (`src/cli/ingestion_commands.py`) to generate `reports/htf_poi_report.html` (default) from persisted candles with tunable structure/FVG/POI parameters.
+- Added unit tests for HTF POI detector behavior, report rendering, and CLI wiring (`tests/unit/test_htf_poi_detector.py`, `tests/unit/test_htf_poi_report.py`, `tests/unit/test_cli_htf_poi_report.py`).
+- Updated HTF POI visualization to draw each zone only on its lifecycle time window (`formed -> invalidated/expired/end`) instead of a full-chart horizontal band, and added `ACT/INV/EXP` markers for event timestamps.
+- Increased default `max_active_pois` for HTF POI context/reporting from `1` to `50` so historical zones are visible by default.
+- Added dynamic POI width after activation, with optional cap of following candles (`max_dynamic_extension_bars`) and source selector (`dynamic_width_source=wick|body`), plus report rendering split between pending (original FVG width) and active (dynamic width).
+- Added `replay_context` mode for HTF POI detection so each FVG is filtered using bias/dealing-range context at its formation time instead of only the final chart context.
+- Added YAML-driven workflow for HTF POI reports via `htf-poi-report-yaml` command, including example config file at `strategies/example_htf_poi.yaml`.
+
 ## 2026-03-05
 
 - Added market structure detector (`src/indicators/structure.py`) with configurable swing pivots (`swing_left/swing_right`), optional tentative last swing, BOS-by-close detection with `bos_buffer`, and derived state (`current_bias`, `current_bias_since`, dealing range with premium/discount zones).

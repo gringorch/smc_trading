@@ -1,0 +1,23 @@
+symbol: EURUSD
+htf_timeframe: 1h
+candles: 100
+end: null
+output: reports/htf_poi_report.html
+
+htf_poi:
+  fvg_direction_filter: with_bias
+  require_discount_premium_alignment: false
+  poi_activation_rule: touch
+  max_active_pois: 50
+  only_unmitigated_fvg: true
+  poi_validity_bars: null
+  poi_expiration_rule: bars_since_activation
+  poi_dynamic_width_enabled: true
+  max_dynamic_extension_bars: 5
+  dynamic_width_source: wick
+  replay_context: true
+  swing_left: 5
+  swing_right: 5
+  bos_buffer: 0.0
+  min_gap_size: 0.0001
+  mitigation_rule: wick
