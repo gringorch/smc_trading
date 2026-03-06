@@ -14,9 +14,11 @@ from config.settings import get_settings
 from db.engine import session_scope
 from ingestion.services.ingestion_service import IngestionService
 from indicators.fvg import FvgConfig, detect_fvgs
+from indicators.htf_poi import HtfPoiConfig, detect_htf_pois
 from indicators.ifvg import IfvgConfig, detect_ifvgs
 from indicators.structure import StructureConfig, analyze_structure
 from reporting.fvg_report import build_fvg_report_html
+from reporting.htf_poi_report import build_htf_poi_report_html
 from reporting.ifvg_report import build_ifvg_report_html
 from reporting.structure_report import build_structure_report_html
 
@@ -38,6 +40,38 @@ def _print_summary(summary_name: str, summary: object) -> None:
         f"succeeded={summary.succeeded_assets} failed={summary.failed_assets} "
         f"upserted={summary.upserted_rows} deleted={summary.deleted_rows}"
     )
+
+
+def _load_yaml_dict(path: Path) -> dict[str, object]:
+    try:
+        import yaml
+    except ImportError as exc:
+        raise typer.BadParameter(
+            "PyYAML is required for YAML config support. Install project dependencies first."
+        ) from exc
+
+    if not path.exists():
+        raise typer.BadParameter(f"Config file not found: {path}")
+
+    content = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if content is None:
+        return {}
+    if not isinstance(content, dict):
+        raise typer.BadParameter("YAML root must be a mapping/object")
+    return content
+
+
+def _yaml_datetime(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError as exc:
+            raise typer.BadParameter(f"Invalid ISO8601 datetime in YAML: {value}") from exc
+    raise typer.BadParameter("YAML field 'end' must be a datetime string (ISO8601) or null")
 
 
 @app.command("backfill")
@@ -339,4 +373,196 @@ def structure_report(
     typer.echo(
         f"structure-report: output={output_path} symbol={symbol} timeframe={timeframe} "
         f"swings={len(result.swings)} bos={len(result.bos_events)} bias={result.state.current_bias}"
+    )
+
+
+@app.command("htf-poi-report")
+def htf_poi_report(
+    symbol: str = typer.Option(..., help="Asset symbol. Use `symbols` command to list values."),
+    htf_timeframe: str = typer.Option(
+        "1h", help=f"Target HTF timeframe. Supported: {', '.join(supported_timeframes())}"
+    ),
+    candles: int = typer.Option(300, help="Number of candles to analyze/display (limit)."),
+    end: datetime | None = typer.Option(
+        default=None, help="Optional end timestamp (ISO8601). Defaults to latest persisted 1m candle."
+    ),
+    fvg_direction_filter: str = typer.Option(
+        "with_bias", help="FVG direction filter: with_bias or both."
+    ),
+    require_discount_premium_alignment: bool = typer.Option(
+        True, help="Require bull-in-discount / bear-in-premium alignment."
+    ),
+    poi_activation_rule: str = typer.Option(
+        "touch", help="POI activation rule: touch, wick_inside, close_inside."
+    ),
+    max_active_pois: int = typer.Option(50, help="Max POI candidates returned after prioritization."),
+    only_unmitigated_fvg: bool = typer.Option(
+        True, help="Require FVG to remain unmitigated before activation."
+    ),
+    poi_validity_bars: int | None = typer.Option(
+        None, help="Optional validity bars for expiration."
+    ),
+    poi_expiration_rule: str = typer.Option(
+        "bars_since_activation",
+        help="POI expiration rule: none, bars_since_activation, bars_since_creation.",
+    ),
+    poi_dynamic_width_enabled: bool = typer.Option(
+        True, help="If true, POI width expands with subsequent candles after activation."
+    ),
+    max_dynamic_extension_bars: int | None = typer.Option(
+        None, help="Optional cap of bars after activation used to expand dynamic POI width."
+    ),
+    dynamic_width_source: str = typer.Option(
+        "wick", help="Source used to expand dynamic width: wick or body."
+    ),
+    replay_context: bool = typer.Option(
+        True,
+        help="If true, evaluates bias/dealing-range context at each FVG formation (historical replay mode).",
+    ),
+    swing_left: int = typer.Option(2, help="Bars to the left for swing (pivot) confirmation."),
+    swing_right: int = typer.Option(2, help="Bars to the right for swing (pivot) confirmation."),
+    bos_buffer: float = typer.Option(
+        0.0, help="Price buffer for BOS confirmation: close > swing_high+buffer or close < swing_low-buffer."
+    ),
+    min_gap_size: float = typer.Option(0.0, help="Minimum gap size for origin FVGs."),
+    mitigation_rule: str = typer.Option("wick", help="FVG mitigation rule: wick or close."),
+    output: str = typer.Option("reports/htf_poi_report.html", help="Output HTML file path."),
+) -> None:
+    """Generate HTF POI HTML report (zones, side, activation, expiration)."""
+    _configure_logging()
+    settings = get_settings()
+
+    config = HtfPoiConfig(
+        fvg_direction_filter=fvg_direction_filter,  # type: ignore[arg-type]
+        require_discount_premium_alignment=require_discount_premium_alignment,
+        poi_activation_rule=poi_activation_rule,  # type: ignore[arg-type]
+        max_active_pois=max_active_pois,
+        only_unmitigated_fvg=only_unmitigated_fvg,
+        poi_validity_bars=poi_validity_bars,
+        poi_expiration_rule=poi_expiration_rule,  # type: ignore[arg-type]
+        poi_dynamic_width_enabled=poi_dynamic_width_enabled,
+        max_dynamic_extension_bars=max_dynamic_extension_bars,
+        dynamic_width_source=dynamic_width_source,  # type: ignore[arg-type]
+        replay_context=replay_context,
+        swing_left=swing_left,
+        swing_right=swing_right,
+        bos_buffer=Decimal(str(bos_buffer)),
+        min_gap_size=Decimal(str(min_gap_size)),
+        mitigation_rule=mitigation_rule,  # type: ignore[arg-type]
+    )
+
+    with session_scope() as session:
+        service = PriceChartService(PriceDataRepository(session), chart_timezone=settings.chart_timezone)
+        bars = service.get_price_bars(symbol=symbol, timeframe=htf_timeframe, candles=candles, end=end)
+
+    context = detect_htf_pois(bars=bars, config=config)
+    end_display = end or bars[-1].timestamp_utc
+    html = build_htf_poi_report_html(
+        symbol=symbol,
+        timeframe=htf_timeframe,
+        candles=candles,
+        end_utc=end_display,
+        config=config,
+        bars=bars,
+        context=context,
+    )
+
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(html, encoding="utf-8")
+
+    active = 1 if context.active_poi is not None else 0
+    typer.echo(
+        f"htf-poi-report: output={output_path} symbol={symbol} timeframe={htf_timeframe} "
+        f"pois={len(context.poi_candidates)} active={active} bias={context.current_bias}"
+    )
+
+
+@app.command("htf-poi-report-yaml")
+def htf_poi_report_yaml(
+    config_file: str = typer.Option(
+        "strategies/example_htf_poi.yaml",
+        "--config-file",
+        help="YAML config file path for HTF POI report.",
+    ),
+) -> None:
+    """Generate HTF POI report using YAML config instead of many CLI flags."""
+    _configure_logging()
+    settings = get_settings()
+
+    payload = _load_yaml_dict(Path(config_file))
+    symbol = payload.get("symbol")
+    if not isinstance(symbol, str) or not symbol:
+        raise typer.BadParameter("YAML field 'symbol' is required and must be a non-empty string")
+
+    timeframe = payload.get("htf_timeframe", "1h")
+    if not isinstance(timeframe, str):
+        raise typer.BadParameter("YAML field 'htf_timeframe' must be a string")
+
+    candles = payload.get("candles", 300)
+    if not isinstance(candles, int):
+        raise typer.BadParameter("YAML field 'candles' must be an integer")
+
+    end = _yaml_datetime(payload.get("end"))
+    output = payload.get("output", "reports/htf_poi_report.html")
+    if not isinstance(output, str):
+        raise typer.BadParameter("YAML field 'output' must be a string")
+
+    poi_cfg = payload.get("htf_poi", {})
+    if not isinstance(poi_cfg, dict):
+        raise typer.BadParameter("YAML field 'htf_poi' must be a mapping/object")
+
+    config = HtfPoiConfig(
+        fvg_direction_filter=str(poi_cfg.get("fvg_direction_filter", "with_bias")),  # type: ignore[arg-type]
+        require_discount_premium_alignment=bool(
+            poi_cfg.get("require_discount_premium_alignment", True)
+        ),
+        poi_activation_rule=str(poi_cfg.get("poi_activation_rule", "touch")),  # type: ignore[arg-type]
+        max_active_pois=int(poi_cfg.get("max_active_pois", 50)),
+        only_unmitigated_fvg=bool(poi_cfg.get("only_unmitigated_fvg", True)),
+        poi_validity_bars=(
+            int(poi_cfg["poi_validity_bars"]) if poi_cfg.get("poi_validity_bars") is not None else None
+        ),
+        poi_expiration_rule=str(
+            poi_cfg.get("poi_expiration_rule", "bars_since_activation")
+        ),  # type: ignore[arg-type]
+        poi_dynamic_width_enabled=bool(poi_cfg.get("poi_dynamic_width_enabled", True)),
+        max_dynamic_extension_bars=(
+            int(poi_cfg["max_dynamic_extension_bars"])
+            if poi_cfg.get("max_dynamic_extension_bars") is not None
+            else None
+        ),
+        dynamic_width_source=str(poi_cfg.get("dynamic_width_source", "wick")),  # type: ignore[arg-type]
+        replay_context=bool(poi_cfg.get("replay_context", True)),
+        swing_left=int(poi_cfg.get("swing_left", 2)),
+        swing_right=int(poi_cfg.get("swing_right", 2)),
+        bos_buffer=Decimal(str(poi_cfg.get("bos_buffer", 0))),
+        min_gap_size=Decimal(str(poi_cfg.get("min_gap_size", 0))),
+        mitigation_rule=str(poi_cfg.get("mitigation_rule", "wick")),  # type: ignore[arg-type]
+    )
+
+    with session_scope() as session:
+        service = PriceChartService(PriceDataRepository(session), chart_timezone=settings.chart_timezone)
+        bars = service.get_price_bars(symbol=symbol, timeframe=timeframe, candles=candles, end=end)
+
+    context = detect_htf_pois(bars=bars, config=config)
+    end_display = end or bars[-1].timestamp_utc
+    html = build_htf_poi_report_html(
+        symbol=symbol,
+        timeframe=timeframe,
+        candles=candles,
+        end_utc=end_display,
+        config=config,
+        bars=bars,
+        context=context,
+    )
+
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(html, encoding="utf-8")
+
+    active = 1 if context.active_poi is not None else 0
+    typer.echo(
+        f"htf-poi-report-yaml: output={output_path} symbol={symbol} timeframe={timeframe} "
+        f"pois={len(context.poi_candidates)} active={active} bias={context.current_bias} config={config_file}"
     )
